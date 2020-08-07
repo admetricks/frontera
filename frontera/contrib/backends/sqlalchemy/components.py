@@ -285,32 +285,51 @@ class DomainMetadata(BaseDomainMetadata):
         self.session = session_cls(expire_on_commit=False)
         self.table = DeclarativeBase.metadata.tables['domain_metadata']
         self.logger = logging.getLogger("sqlalchemy.domain_metadata")
+        self._cache = {}
+        self._to_be_deleted = set()
 
     def frontier_stop(self):
+        self.flush()
         self.session.close()
 
-    @retry_and_rollback
     def __setitem__(self, key, value):
+        try:
+            self._to_be_deleted.remove(key)
+        except KeyError:
+            pass
         pair = DomainMetadataKV(key=key, value=value)
-        self.session.merge(pair)
-        self.session.commit()
+        self.session.add(pair)
+        self._cache[key] = pair
 
     @retry_and_rollback
     def __getitem__(self, key):
-        result = self.session.query(DomainMetadataKV).filter(DomainMetadataKV.key == key).first()
-        if result is None:
+        if key in self._to_be_deleted:
             raise KeyError
-        return result.value
+        if key not in self._cache:
+            result = self.session.query(DomainMetadataKV)\
+                .filter(DomainMetadataKV.key == key).first()
+            if result is None:
+                raise KeyError
+            self._cache[key] = result
+        return self._cache[key].value
 
-    @retry_and_rollback
     def __contains__(self, key):
-        result = self.session.query(DomainMetadataKV.key).filter(DomainMetadataKV.key == key).first()
-        if result is not None:
+        try:
+            self[key]
+        except KeyError:
+            return False
+        else:
             return True
-        return False
+
+    def __delitem__(self, key):
+        if key in self._cache:
+            self.session.expunge(self._cache[key])
+            del self._cache[key]
+        self._to_be_deleted.add(key)
 
     @retry_and_rollback
-    def __delitem__(self, key):
-        self.session.query(DomainMetadataKV).filter(DomainMetadataKV.key == key).delete(synchronize_session=False)
+    def flush(self):
+        for key in self._to_be_deleted:
+            self.session.query(DomainMetadataKV).filter(DomainMetadataKV.key == key)\
+                .delete(synchronize_session=False)
         self.session.commit()
-
