@@ -37,7 +37,11 @@ class Server(object):
             'db_in_recvd': 0,
             'db_out_recvd': 0,
             'sw_in_recvd': 0,
-            'sw_out_recvd': 0
+            'sw_out_recvd': 0,
+            'reset_in_recvd': 0,
+            'reset_out_recvd': 0,
+            'reset_ack_in_recvd': 0,
+            'reset_ack_out_recvd': 0
         }
 
         socket_config = SocketConfig(address, base_port)
@@ -51,6 +55,10 @@ class Server(object):
         sw_out_s = self.ctx.socket(zmq.XSUB)
         db_in_s = self.ctx.socket(zmq.XPUB)
         db_out_s = self.ctx.socket(zmq.XSUB)
+        reset_in = self.ctx.socket(zmq.XSUB)
+        reset_out = self.ctx.socket(zmq.XPUB)
+        reset_ack_in = self.ctx.socket(zmq.XSUB)
+        reset_ack_out = self.ctx.socket(zmq.XPUB)
 
         spiders_in_s.bind(socket_config.spiders_in())
         spiders_out_s.bind(socket_config.spiders_out())
@@ -58,6 +66,10 @@ class Server(object):
         sw_out_s.bind(socket_config.sw_out())
         db_in_s.bind(socket_config.db_in())
         db_out_s.bind(socket_config.db_out())
+        reset_in.bind(socket_config.reset_in())
+        reset_out.bind(socket_config.reset_out())
+        reset_ack_in.bind(socket_config.reset_ack_in())
+        reset_ack_out.bind(socket_config.reset_ack_out())
 
         self.spiders_in = ZMQStream(spiders_in_s)
         self.spiders_out = ZMQStream(spiders_out_s)
@@ -65,6 +77,10 @@ class Server(object):
         self.sw_out = ZMQStream(sw_out_s)
         self.db_in = ZMQStream(db_in_s)
         self.db_out = ZMQStream(db_out_s)
+        self.reset_in = ZMQStream(reset_in)
+        self.reset_out = ZMQStream(reset_out)
+        self.reset_ack_in = ZMQStream(reset_ack_in)
+        self.reset_ack_out = ZMQStream(reset_ack_out)
 
         self.spiders_out.on_recv(self.handle_spiders_out_recv)
         self.sw_out.on_recv(self.handle_sw_out_recv)
@@ -72,6 +88,12 @@ class Server(object):
 
         self.sw_in.on_recv(self.handle_sw_in_recv)
         self.db_in.on_recv(self.handle_db_in_recv)
+
+        self.reset_in.on_recv(self.handle_reset_in_recv)
+        self.reset_out.on_recv(self.handle_reset_out_recv)
+        self.reset_ack_in.on_recv(self.handle_reset_ack_in_recv)
+        self.reset_ack_out.on_recv(self.handle_reset_ack_out_recv)
+
         self.spiders_in.on_recv(self.handle_spiders_in_recv)
         logging.basicConfig(format="%(asctime)s %(message)s",
                             datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
@@ -126,6 +148,24 @@ class Server(object):
         if b'\x01' in msg[0] or b'\x00' in msg[0]:
             self.db_out.send_multipart(msg)
         self.stats['spiders_in_recvd'] += 1
+
+    def handle_reset_in_recv(self, msg):
+        self.reset_out.send_multipart(msg)
+        self.stats['reset_in_recvd'] += 1
+
+    def handle_reset_out_recv(self, msg):
+        if b'\x01' in msg[0] or b'\x00' in msg[0]:
+            self.reset_in.send_multipart(msg)
+        self.stats['reset_out_recvd'] += 1
+
+    def handle_reset_ack_in_recv(self, msg):
+        self.reset_ack_out.send_multipart(msg)
+        self.stats['reset_ack_in_recvd'] += 1
+
+    def handle_reset_ack_out_recv(self, msg):
+        if b'\x01' in msg[0] or b'\x00' in msg[0]:
+            self.reset_ack_in.send_multipart(msg)
+        self.stats['reset_ack_out_recvd'] += 1
 
     def decode_subscription(self, msg):
         """

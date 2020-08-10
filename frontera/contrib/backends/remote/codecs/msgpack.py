@@ -46,6 +46,15 @@ class Encoder(BaseEncoder):
     def encode_stats(self, stats):
         return packb([b'st', stats], use_bin_type=True)
 
+    def encode_reset(self):
+        return packb([b'r0'], use_bin_type=True)
+
+    def encode_reset_done(self):
+        return packb([b'r1'], use_bin_type=True)
+
+    def encode_reset_ack(self):
+        return packb([b'ra'], use_bin_type=True)
+
 
 class Decoder(BaseDecoder):
     def __init__(self, request_model, response_model, *a, **kw):
@@ -87,6 +96,12 @@ class Decoder(BaseDecoder):
             return ('offset', int(obj[1]), int(obj[2]))
         if obj[0] == b'st':
             return ('stats', obj[1])
+        if obj[0] == b'r0':
+            return ('reset',)
+        if obj[0] == b'r1':
+            return ('reset_done',)
+        if obj[0] == b'ra':
+            return ('reset_ack',)
         raise TypeError('Unknown message type')
 
     def decode_request(self, buffer):

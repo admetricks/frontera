@@ -2,19 +2,21 @@
 from __future__ import absolute_import
 
 import logging
+import threading
 from argparse import ArgumentParser
 from binascii import hexlify
 from logging.config import fileConfig
 from os.path import exists
 from random import randint
 from signal import signal, SIGUSR1
-from time import asctime
+from time import asctime, sleep
+from timeit import default_timer as timer
 from traceback import format_stack, format_tb
 from collections import defaultdict
 
 import six
 from six.moves.urllib.parse import urlparse
-from twisted.internet import reactor, task
+from twisted.internet import reactor, task, threads
 from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 
@@ -27,6 +29,52 @@ from frontera.worker.server import WorkerJsonRpcService
 from frontera.worker.stats import StatsExportMixin
 
 logger = logging.getLogger("strategy-worker")
+
+
+class ResetHandler(object):
+    """Object that manages the reset read from the queue.
+
+    Meant to be run in a second thread via the `schedule` method.
+    """
+
+    def __init__(self, worker, settings):
+        self.worker = worker
+        self.run_backoff = 0
+        self.stop_event = worker.reset_handler_stop_event
+        messagebus = load_object(settings.get('MESSAGE_BUS'))
+        mb = messagebus(settings)
+        self.reset_log_consumer = mb.reset_log().consumer()
+        self.resetting = False
+        self.reset_start = None
+
+    def schedule(self):
+        return threads.deferToThread(self.loop)
+
+    def loop(self):
+        while not self.stop_event.is_set():
+            try:
+                self.run()
+            except Exception:
+                logger.exception('Exception in the ResetHandler loop')
+            else:
+                if self.run_backoff:
+                    delay_msg = 'Sleep for {} seconds before next run()'
+                    logger.debug(delay_msg.format(self.run_backoff))
+                    sleep(self.run_backoff)
+
+    def run(self):
+        """Body of one iteration."""
+        for m in self.reset_log_consumer.get_messages(count=1, timeout=2):
+            try:
+                msg = self.worker._decoder.decode(m)
+            except (KeyError, TypeError):
+                logger.exception("Decoding error")
+                continue
+            else:
+                if msg[0] == 'reset':
+                    self.worker.reset_event.set()
+                elif msg[0] == 'reset_done':
+                    self.worker.reset_done_event.set()
 
 
 class BatchedWorkflow(object):
@@ -173,9 +221,33 @@ class BaseStrategyWorker(object):
         self._logging_task = LoopingCall(self.log_status)
         self._flush_states_task = LoopingCall(self.flush_states)
         self._flush_interval = settings.get("SW_FLUSH_INTERVAL")
+
+        self.resetting = False
+        self.running = threading.Event()
+        self.running.set()
+
+        # reset code
+        self.resetting = False
+        self.reset_start = None
+        self.reset_ack_log_producer = mb.reset_ack_log().producer()
+
+        self.reset_event = threading.Event()
+        self.reset_done_event = threading.Event()
+        self.reset_handler_stop_event = threading.Event()
+
+        self.reset_handler = ResetHandler(self, settings)
+        self.reset_handler.schedule()
+        # /reset code
+
         logger.info("Strategy worker is initialized and consuming partition %d", partition_id)
 
     def work(self):
+        # reset code
+        self.handle_reset_events()
+        if self.resetting:
+            return
+        # /reset code
+
         consumed = 0
         self.workflow.collection_start()
         for m in self.consumer.get_messages(count=self.consumer_batch_size, timeout=1.0):
@@ -201,6 +273,48 @@ class BaseStrategyWorker(object):
         self.stats['last_consumed'] = consumed
         self.stats['last_consumption_run'] = asctime()
         self.stats['consumed_since_start'] += consumed
+
+    def handle_reset_events(self):
+        reset_done = False
+
+        if self.reset_event.is_set():
+            logger.info(
+                "Reset signal received. Sending ACK to seeder, "
+                "flushing DB cache and pausing worker."
+            )
+            self.reset_event.clear()
+
+            # flush backend
+            self.workflow.strategy.domain_cache.flush()
+            self.flush_states()
+            self.backend.frontier_stop()
+            self.backend.frontier_start()
+
+            reset_ack_signal = self._encoder.encode_reset_ack()
+            self.reset_ack_log_producer.send(None, reset_ack_signal)
+            self.resetting = True
+            self.reset_start = timer()
+
+        elif self.reset_done_event.is_set():
+            logger.info("Got reset_done signal. Resuming worker.")
+            self.reset_done_event.clear()
+
+            reset_done = True
+
+        if self.resetting and timer() - self.reset_start > self.RESET_TIMEOUT:
+            logger.warning(
+                "Considering reset as done because of timeout, resuming worker"
+            )
+            reset_done = True
+
+        if reset_done:
+            # flush backend again just in case
+            self.workflow.strategy.domain_cache.flush()
+            self.flush_states()
+            self.backend.frontier_stop()
+            self.backend.frontier_start()
+
+            self.resetting = False
 
     def add_seeds(self, seeds_url):
         logger.info("Seeds addition started from url %s", seeds_url)
@@ -285,6 +399,10 @@ class BaseStrategyWorker(object):
 
     def stop_tasks(self):
         logger.info("Stopping periodic tasks.")
+        # reset code
+        self.reset_handler_stop_event.set()
+        # /reset code
+
         if self.task.running:
             self.task.stop()
         if self._flush_states_task.running:
