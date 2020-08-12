@@ -26,9 +26,14 @@ from frontera.worker.stats import StatsExportMixin
 from .components.incoming_consumer import IncomingConsumer
 from .components.scoring_consumer import ScoringConsumer
 from .components.batch_generator import BatchGenerator
+from .components.reset_consumer import ResetConsumer
+from .components.main_thread_operator import MainThreadOperator
 
 
-ALL_COMPONENTS = [ScoringConsumer, IncomingConsumer, BatchGenerator]
+ALL_COMPONENTS = [
+    ScoringConsumer, IncomingConsumer, BatchGenerator, ResetConsumer,
+    MainThreadOperator
+]
 LOGGING_TASK_INTERVAL = 30
 
 logger = logging.getLogger("db-worker")
@@ -46,6 +51,10 @@ class Slot(object):
         self.components = self._load_components(worker, settings, **kwargs)
         self._setup_managing_batches()
         self._deferred = None
+        self.main_thread_operator = [
+            comp for comp in self.components.values()
+            if comp.NAME == 'main_thread_operator'
+        ][0]
 
     def _load_components(self, worker, settings, **kwargs):
         # each component is stored as (cls, instance) pair
@@ -128,6 +137,9 @@ class BaseDBWorker(object):
         install_shutdown_handlers(self._handle_shutdown)
         signal(SIGUSR1, debug)
         reactor.run(installSignalHandlers=False)
+
+    def on_main_thread(self, function, shutdown_value=None):
+        return self.slot.main_thread_operator.perform(function, shutdown_value)
 
     # Auxiliary methods
 

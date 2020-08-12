@@ -217,6 +217,42 @@ class StatsLogStream(BaseStatsLogStream):
         return DevNullProducer()
 
 
+class ResetLog(object):
+    """
+    Reset log stream class. This stream broadcasts reset signals that are read
+    from the seeder in the queue, so that caches among all workers get flushed.
+    """
+
+    def __init__(self, messagebus):
+        self.context = messagebus.context
+        self.in_location = messagebus.socket_config.reset_in()
+        self.out_location = messagebus.socket_config.reset_out()
+
+    def consumer(self):
+        return Consumer(self.context, self.out_location, None, b'rl')
+
+    def producer(self):
+        return NonPartitionedProducer(self.context, self.in_location, b'rl')
+
+
+class ResetAckLog(object):
+    """
+    Reset ACK log stream base class. This stream is used for acknowledging
+    the reset requests from the seeder.
+    """
+
+    def __init__(self, messagebus):
+        self.context = messagebus.context
+        self.in_location = messagebus.socket_config.reset_ack_in()
+        self.out_location = messagebus.socket_config.reset_ack_out()
+
+    def consumer(self):
+        return Consumer(self.context, self.out_location, None, b'ra')
+
+    def producer(self):
+        return NonPartitionedProducer(self.context, self.in_location, b'ra')
+
+
 class Context(object):
 
     zeromq = zmq.Context()
@@ -247,3 +283,9 @@ class MessageBus(BaseMessageBus):
 
     def stats_log(self):
         return StatsLogStream(self)
+
+    def reset_log(self):
+        return ResetLog(self)
+
+    def reset_ack_log(self):
+        return ResetAckLog(self)

@@ -67,3 +67,28 @@ class SocketConfig(object):
         TCP socket for outgoing stats
         """
         return 'tcp://%s:%d' % (self.ip_addr, self.base_port + 6)
+
+    def reset_in(self):
+        """
+        TCP socket for incoming reset signals
+        """
+        return 'tcp://%s:%d' % (self.ip_addr, self.base_port + 7)
+
+    def reset_out(self):
+        """
+        TCP socket for outgoing reset signals
+        """
+        return 'tcp://%s:%d' % (self.ip_addr, self.base_port + 8)
+
+    def reset_ack_in(self):
+        """
+        TCP socket for incoming reset ACKs
+        """
+        return 'tcp://%s:%d' % (self.ip_addr, self.base_port + 9)
+
+    def reset_ack_out(self):
+        """
+        TCP socket for outgoing reset ACKS
+        """
+        return 'tcp://%s:%d' % (self.ip_addr, self.base_port + 10)
+

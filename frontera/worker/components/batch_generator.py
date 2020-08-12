@@ -69,8 +69,9 @@ class BatchGenerator(DBWorkerThreadComponent):
     def _handle_partition(self, partition_id):
         self.logger.info("Getting new batches for partition %d", partition_id)
         count = 0
-        for request in self.backend.get_next_requests(self.max_next_requests,
-                                                      partitions=[partition_id]):
+        for request in self._get_next_requests(
+            self.max_next_requests, partitions=[partition_id]
+        ):
             if self._is_domain_blacklisted(request):
                 continue
             try:
@@ -93,6 +94,14 @@ class BatchGenerator(DBWorkerThreadComponent):
                     self.domain_stats[partition_id][hostname] += 1
         self.update_stats(increments={'pushed_since_start': count})
         return count
+
+    def _get_next_requests(self, max_next_requests, partitions):
+        return self.worker.on_main_thread(
+            lambda: self.backend.get_next_requests(
+                self.max_next_requests, partitions=partitions
+            ),
+            shutdown_value=[]
+        )
 
     def _is_domain_blacklisted(self, request):
         if not self.domains_blacklist:
