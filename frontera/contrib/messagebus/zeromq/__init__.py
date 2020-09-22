@@ -228,7 +228,7 @@ class ResetLog(object):
         self.in_location = messagebus.socket_config.reset_in()
         self.out_location = messagebus.socket_config.reset_out()
 
-    def consumer(self):
+    def consumer(self, type):
         return Consumer(self.context, self.out_location, None, b'rl')
 
     def producer(self):
