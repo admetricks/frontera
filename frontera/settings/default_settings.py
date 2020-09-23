@@ -95,12 +95,17 @@ SPIDER_FEED_TOPIC = "frontier-todo"
 SPIDER_LOG_TOPIC = "frontier-done"
 SCORING_LOG_TOPIC = "frontier-score"
 STATS_LOG_TOPIC = 'frontier-stats'
+RESET_LOG_TOPIC = "frontier-reset"
+RESET_ACK_LOG_TOPIC = "frontier-reset-ack"
 
 SPIDER_LOG_DBW_GROUP = "dbw-spider-log"
 SPIDER_LOG_SW_GROUP = "sw-spider-log"
 SCORING_LOG_DBW_GROUP = "dbw-scoring-log"
 SPIDER_FEED_GROUP = "fetchers-spider-feed"
 STATS_LOG_READER_GROUP = 'stats-reader-log'
+RESET_LOG_DBW_GROUP = "dbw-reset-log"
+RESET_LOG_SW_GROUP = "sw-reset-log"
+RESET_ACK_LOG_GROUP = "reset-ack-reader-log"
 
 KAFKA_CODEC = None
 KAFKA_CERT_PATH = '/mnt/mesos/sandbox'

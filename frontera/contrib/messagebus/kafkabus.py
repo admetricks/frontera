@@ -240,18 +240,71 @@ class StatsLogStream(ScoringLogStream, BaseStatsLogStream):
         self._group = messagebus.statslog_reader_group
 
 
+# TODO finish
+class ResetLog(object):
+
+    def __init__(self, messagebus):
+        self._topic = messagebus.topic_scoring
+        self._db_group = messagebus.resetlog_dbw_group
+        self._sw_group = messagebus.resetlog_sw_group
+        self._location = messagebus.kafka_location
+        self._codec = messagebus.codec
+        self._cert_path = messagebus.cert_path
+        self._enable_ssl = messagebus.enable_ssl
+
+    def consumer(self, type):
+        """
+        Creates reset log consumer with BaseStreamConsumer interface
+        :param type: either 'db' or 'sw'
+        :return:
+        """
+        group = self._sw_group if type == b'sw' else self._db_group
+        c = Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, group, partition_id=None)
+        return c
+
+    def producer(self):
+        return SimpleProducer(self._location, self._enable_ssl, self._cert_path, self._topic, self._codec,
+                              batch_size=DEFAULT_BATCH_SIZE,
+                              buffer_memory=DEFAULT_BUFFER_MEMORY)
+
+
+class ResetAckLog(object):
+
+    def __init__(self, messagebus):
+        self._topic = messagebus.topic_reset_ack
+        self._group = messagebus.reset_ack_log_group
+        self._location = messagebus.kafka_location
+        self._codec = messagebus.codec
+        self._cert_path = messagebus.cert_path
+        self._enable_ssl = messagebus.enable_ssl
+
+    def consumer(self):
+        return Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, self._group, partition_id=None)
+
+    def producer(self):
+        return SimpleProducer(self._location, self._enable_ssl, self._cert_path, self._topic, self._codec,
+                              batch_size=DEFAULT_BATCH_SIZE,
+                              buffer_memory=DEFAULT_BUFFER_MEMORY)
+
+
 class MessageBus(BaseMessageBus):
     def __init__(self, settings):
         self.topic_todo = settings.get('SPIDER_FEED_TOPIC')
         self.topic_done = settings.get('SPIDER_LOG_TOPIC')
         self.topic_scoring = settings.get('SCORING_LOG_TOPIC')
         self.topic_stats = settings.get('STATS_LOG_TOPIC')
+        self.topic_reset = settings.get('RESET_LOG_TOPIC')
+        self.topic_reset_ack = settings.get('RESET_ACK_LOG_TOPIC')
 
         self.spiderlog_dbw_group = settings.get('SPIDER_LOG_DBW_GROUP')
         self.spiderlog_sw_group = settings.get('SPIDER_LOG_SW_GROUP')
         self.scoringlog_dbw_group = settings.get('SCORING_LOG_DBW_GROUP')
         self.statslog_reader_group = settings.get('STATS_LOG_READER_GROUP')
         self.spider_feed_group = settings.get('SPIDER_FEED_GROUP')
+        self.resetlog_dbw_group = settings.get('RESET_LOG_DBW_GROUP')
+        self.resetlog_sw_group = settings.get('RESET_LOG_SW_GROUP')
+        self.reset_ack_log_group = settings.get('RESET_ACK_LOG_GROUP')
+
         self.spider_partition_id = settings.get('SPIDER_PARTITION_ID')
         self.max_next_requests = settings.MAX_NEXT_REQUESTS
         self.hostname_partitioning = settings.get('QUEUE_HOSTNAME_PARTITIONING')
@@ -273,3 +326,9 @@ class MessageBus(BaseMessageBus):
 
     def stats_log(self):
         return StatsLogStream(self)
+
+    def reset_log(self):
+        return ResetLog(self)
+
+    def reset_ack_log(self):
+        return ResetAckLog(self)
