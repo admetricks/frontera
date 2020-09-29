@@ -43,7 +43,7 @@ class ResetHandler(object):
         self.stop_event = worker.reset_handler_stop_event
         messagebus = load_object(settings.get('MESSAGE_BUS'))
         mb = messagebus(settings)
-        self.reset_log_consumer = mb.reset_log().consumer('sw')
+        self.reset_log_consumer = mb.reset_log().consumer()
         self.resetting = False
         self.reset_start = None
 

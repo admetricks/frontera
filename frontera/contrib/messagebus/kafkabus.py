@@ -246,21 +246,13 @@ class ResetLog(object):
 
     def __init__(self, messagebus):
         self._topic = messagebus.topic_scoring
-        self._db_group = messagebus.resetlog_dbw_group
-        self._sw_group = messagebus.resetlog_sw_group
         self._location = messagebus.kafka_location
         self._codec = messagebus.codec
         self._cert_path = messagebus.cert_path
         self._enable_ssl = messagebus.enable_ssl
 
-    def consumer(self, type):
-        """
-        Creates reset log consumer with BaseStreamConsumer interface
-        :param type: either 'db' or 'sw'
-        :return:
-        """
-        group = self._sw_group if type == b'sw' else self._db_group
-        c = Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, group, partition_id=None)
+    def consumer(self):
+        c = Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, None, partition_id=None)
         return c
 
     def producer(self):
