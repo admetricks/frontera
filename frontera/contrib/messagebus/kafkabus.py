@@ -49,7 +49,9 @@ class Consumer(BaseStreamConsumer):
             consumer_timeout_ms=100,
             client_id="%s-%s" % (self._topic, str(partition_id) if partition_id is not None else "all"),
             request_timeout_ms=120 * 1000,
-            heartbeat_interval_ms=10000,
+            heartbeat_interval_ms=3000,
+            session_timeout_ms=10000,
+            max_poll_interval_ms=900000,
             **kwargs
         )
 
@@ -189,7 +191,14 @@ class SpiderFeedStream(BaseSpiderFeedStream):
         self._partitions = messagebus.spider_feed_partitions
 
     def consumer(self, partition_id):
-        c = Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, self._general_group, partition_id)
+        c = Consumer(
+            self._location,
+            self._enable_ssl,
+            self._cert_path,
+            self._topic,
+            self._general_group,
+            partition_id,
+        )
         assert len(c._consumer.partitions_for_topic(self._topic)) == self._partitions, \
             "Number of kafka topic partitions doesn't match value in config for spider feed"
         return c
@@ -245,21 +254,13 @@ class ResetLog(object):
 
     def __init__(self, messagebus):
         self._topic = messagebus.topic_scoring
-        self._db_group = messagebus.resetlog_dbw_group
-        self._sw_group = messagebus.resetlog_sw_group
         self._location = messagebus.kafka_location
         self._codec = messagebus.codec
         self._cert_path = messagebus.cert_path
         self._enable_ssl = messagebus.enable_ssl
 
-    def consumer(self, type):
-        """
-        Creates reset log consumer with BaseStreamConsumer interface
-        :param type: either 'db' or 'sw'
-        :return:
-        """
-        group = self._sw_group if type == b'sw' else self._db_group
-        c = Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, group, partition_id=None)
+    def consumer(self):
+        c = Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, None, partition_id=None)
         return c
 
     def producer(self):

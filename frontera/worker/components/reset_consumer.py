@@ -16,7 +16,7 @@ class ResetConsumer(DBWorkerThreadComponent):
         super(ResetConsumer, self).__init__(worker, settings, stop_event, *args, **kwargs)
         reset_log = worker.message_bus.reset_log()
         reset_ack_log = worker.message_bus.reset_ack_log()
-        self.reset_log_consumer = reset_log.consumer('db')
+        self.reset_log_consumer = reset_log.consumer()
         self.reset_ack_log_producer = reset_ack_log.producer()
         self.started = threading.Event()
         self.resetting = False

@@ -103,8 +103,6 @@ SPIDER_LOG_SW_GROUP = "sw-spider-log"
 SCORING_LOG_DBW_GROUP = "dbw-scoring-log"
 SPIDER_FEED_GROUP = "fetchers-spider-feed"
 STATS_LOG_READER_GROUP = 'stats-reader-log'
-RESET_LOG_DBW_GROUP = "dbw-reset-log"
-RESET_LOG_SW_GROUP = "sw-reset-log"
 RESET_ACK_LOG_GROUP = "reset-ack-reader-log"
 
 KAFKA_CODEC = None
