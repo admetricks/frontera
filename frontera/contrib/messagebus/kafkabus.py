@@ -51,6 +51,7 @@ class Consumer(BaseStreamConsumer):
             request_timeout_ms=120 * 1000,
             heartbeat_interval_ms=3000,
             session_timeout_ms=10000,
+            max_poll_interval_ms=900000,
             **kwargs
         )
 
@@ -190,7 +191,14 @@ class SpiderFeedStream(BaseSpiderFeedStream):
         self._partitions = messagebus.spider_feed_partitions
 
     def consumer(self, partition_id):
-        c = Consumer(self._location, self._enable_ssl, self._cert_path, self._topic, self._general_group, partition_id)
+        c = Consumer(
+            self._location,
+            self._enable_ssl,
+            self._cert_path,
+            self._topic,
+            self._general_group,
+            partition_id,
+        )
         assert len(c._consumer.partitions_for_topic(self._topic)) == self._partitions, \
             "Number of kafka topic partitions doesn't match value in config for spider feed"
         return c
