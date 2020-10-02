@@ -186,6 +186,8 @@ class BatchedWorkflow(object):
 class BaseStrategyWorker(object):
     """Base strategy worker class."""
 
+    RESET_TIMEOUT = 30
+
     def __init__(self, settings, is_add_seeds_mode):
         partition_id = settings.get('SCORING_PARTITION_ID')
         if partition_id is None or type(partition_id) != int:
